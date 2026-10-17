@@ -7,15 +7,15 @@ create table if not exists public.notes (
   created_at timestamptz default now()
 );
 
--- Enable RLS
 alter table public.notes enable row level security;
 
--- Allow public read
+-- Safe to rerun: drop policies first if they already exist
+drop policy if exists "Public read access" on public.notes;
 create policy "Public read access"
   on public.notes for select
   using (true);
 
--- Allow public insert
+drop policy if exists "Public insert access" on public.notes;
 create policy "Public insert access"
   on public.notes for insert
   with check (true);
