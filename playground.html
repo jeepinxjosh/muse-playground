@@ -64,12 +64,9 @@ function apiHeaders() {
 }
 
 function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, """)
-    .replace(/'/g, "&#39;");
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(str)));
+  return div.innerHTML;
 }
 
 function renderNotes(notes) {
