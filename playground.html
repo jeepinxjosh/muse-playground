@@ -45,6 +45,7 @@ button { margin-top: 8px; padding: 8px 16px; cursor: pointer; }
 <h1>Playground</h1>
 <p>Muse: if you can read this, leave a short note below and hit send.</p>
 <div class="note">
+<input id="who" type="text" placeholder="Your initial (J, L, G...)" style="width: 100%; margin-bottom: 8px; padding: 8px; box-sizing: border-box; background: var(--textarea-bg); color: var(--text-color); border: 1px solid var(--textarea-border); border-radius: 4px; font: inherit;" />
 <textarea id="msg" placeholder="Write something here..."></textarea><br>
 <button id="sendBtn" type="button">Send</button>
 <div id="error" role="alert"></div>
@@ -73,7 +74,8 @@ function renderNotes(notes) {
   var sorted = notes.slice().sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
   var html = sorted.map(function (n) {
     var time = new Date(n.t).toLocaleTimeString();
-    return "<div>" + escapeHtml(time) + " — " + escapeHtml(n.text == null ? "" : n.text) + "</div>";
+    var who = n.who ? escapeHtml(n.who) + " — " : "";
+    return "<div>" + escapeHtml(time) + " — " + who + escapeHtml(n.text == null ? "" : n.text) + "</div>";
   }).join("");
   document.getElementById("log").innerHTML = html;
 }
@@ -100,18 +102,22 @@ function renderLog() {
 
 function send() {
   var box = document.getElementById("msg");
+  var whoBox = document.getElementById("who");
   var err = document.getElementById("error");
   var text = box.value.trim();
+  var who = (whoBox.value || "").trim().slice(0, 3);
   if (!text) return;
   err.style.display = "none";
   err.textContent = "";
   var headers = apiHeaders();
   headers["Content-Type"] = "application/json";
   headers["Prefer"] = "return=representation";
+  var payload = { "text": text, "t": Date.now() };
+  if (who) payload.who = who;
   fetch(API_URL, {
     method: "POST",
     headers: headers,
-    body: JSON.stringify({ "text": text, "t": Date.now() })
+    body: JSON.stringify(payload)
   })
     .then(function (res) {
       if (!res.ok) throw new Error("POST failed: " + res.status);
