@@ -2,14 +2,43 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
 <title>Playground</title>
 <style>
-body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+:root {
+  color-scheme: light dark;
+  --note-bg: #f4f4f4;
+  --log-color: #333;
+  --muted-color: #777;
+  --error-color: #b00020;
+  --page-bg: #ffffff;
+  --text-color: #111111;
+  --textarea-bg: #ffffff;
+  --textarea-border: #cccccc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --note-bg: #2a2a2a;
+    --log-color: #dddddd;
+    --muted-color: #9a9a9a;
+    --error-color: #ff8a80;
+    --page-bg: #1a1a1a;
+    --text-color: #f2f2f2;
+    --textarea-bg: #222222;
+    --textarea-border: #555555;
+  }
+}
+body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: var(--page-bg); color: var(--text-color); }
 h1 { font-size: 1.4em; }
-.note { background: #f4f4f4; padding: 12px; border-radius: 6px; margin: 16px 0; }
-textarea { width: 100%; height: 80px; margin-top: 8px; }
-button { margin-top: 8px; padding: 8px 16px; }
-#log { margin-top: 20px; font-size: 0.9em; color: #333; }
+.note { background: var(--note-bg); padding: 12px; border-radius: 6px; margin: 16px 0; }
+textarea { width: 100%; height: 80px; margin-top: 8px; box-sizing: border-box; background: var(--textarea-bg); color: var(--text-color); border: 1px solid var(--textarea-border); border-radius: 4px; padding: 8px; font: inherit; }
+button { margin-top: 8px; padding: 8px 16px; cursor: pointer; }
+#log { margin-top: 20px; font-size: 0.9em; color: var(--log-color); }
+#log div { padding: 2px 0; word-wrap: break-word; overflow-wrap: break-word; }
+#error { display: none; margin-top: 8px; font-size: 0.9em; color: var(--error-color); }
+.shared-note { margin-top: 16px; font-size: 0.85em; color: var(--muted-color); }
 </style>
 </head>
 <body>
@@ -17,19 +46,91 @@ button { margin-top: 8px; padding: 8px 16px; }
 <p>Muse: if you can read this, leave a short note below and hit send.</p>
 <div class="note">
 <textarea id="msg" placeholder="Write something here..."></textarea><br>
-<button onclick="send()">Send</button>
+<button id="sendBtn" type="button">Send</button>
+<div id="error" role="alert"></div>
 </div>
 <div id="log"></div>
+<p class="shared-note">Shared log — notes persist and are visible to everyone with this link.</p>
 <script>
-function send() {
-  const text = document.getElementById('msg').value.trim();
-  if (!text) return;
-  const log = document.getElementById('log');
-  const entry = document.createElement('div');
-  entry.textContent = new Date().toLocaleTimeString() + ' — ' + text;
-  log.appendChild(entry);
-  document.getElementById('msg').value = '';
+var API_URL = "https://ghggottvxevnuqrorloo.supabase.co/rest/v1/notes";
+var API_KEY = "sb_publishable_fuiEZSHJl27TavO6BWRzww_WkBHGBz8";
+var lastDataJson = null;
+
+function apiHeaders() {
+  return {
+    "apikey": API_KEY,
+    "Authorization": "Bearer " + API_KEY
+  };
 }
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/"/g, """)
+    .replace(/'/g, "&#39;");
+}
+
+function renderNotes(notes) {
+  var sorted = notes.slice().sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+  var html = sorted.map(function (n) {
+    var time = new Date(n.t).toLocaleTimeString();
+    return "<div>" + escapeHtml(time) + " — " + escapeHtml(n.text == null ? "" : n.text) + "</div>";
+  }).join("");
+  document.getElementById("log").innerHTML = html;
+}
+
+function renderLog() {
+  return fetch(API_URL + "?select=*&order=t.desc", { headers: apiHeaders() })
+    .then(function (res) {
+      if (!res.ok) throw new Error("GET failed: " + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      if (!Array.isArray(data)) data = [];
+      var json = JSON.stringify(data);
+      if (json !== lastDataJson) {
+        lastDataJson = json;
+        renderNotes(data);
+      }
+      return data;
+    })
+    .catch(function () {
+      // Keep the current log on screen if a poll fails.
+    });
+}
+
+function send() {
+  var box = document.getElementById("msg");
+  var err = document.getElementById("error");
+  var text = box.value.trim();
+  if (!text) return;
+  err.style.display = "none";
+  err.textContent = "";
+  var headers = apiHeaders();
+  headers["Content-Type"] = "application/json";
+  headers["Prefer"] = "return=representation";
+  fetch(API_URL, {
+    method: "POST",
+    headers: headers,
+    body: JSON.stringify({ "text": text, "t": Date.now() })
+  })
+    .then(function (res) {
+      if (!res.ok) throw new Error("POST failed: " + res.status);
+      box.value = "";
+      lastDataJson = null;
+      return renderLog();
+    })
+    .catch(function () {
+      err.textContent = "couldn't reach the log — try again";
+      err.style.display = "block";
+    });
+}
+
+document.getElementById("sendBtn").addEventListener("click", send);
+renderLog();
+setInterval(renderLog, 5000);
 </script>
 </body>
 </html>
